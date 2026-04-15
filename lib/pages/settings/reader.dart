@@ -442,6 +442,65 @@ class _ReaderSettingsState extends State<ReaderSettings> {
             useDeviceSettings: useDeviceSpecificSettings,
           ),
         ),
+        // E-Ink refresh settings
+        _SwitchSetting(
+          title: "E-Ink Screen Refresh".tl,
+          subtitle: "Flash screen when turning pages for E-Ink devices".tl,
+          settingKey: "enableEInkRefresh",
+          onChanged: () {
+            setState(() {});
+            widget.onChanged?.call("enableEInkRefresh");
+          },
+          comicId: isEnabledSpecificSettings ? widget.comicId : null,
+          comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
+          useDeviceSettings: useDeviceSpecificSettings,
+        ).toSliver(),
+        SliverAnimatedVisibility(
+          visible: appdata.settings.getReaderSetting(
+                comicId ?? '',
+                sourceKey ?? '',
+                'enableEInkRefresh',
+              ) == true ||
+              (comicId == null && appdata.settings['enableEInkRefresh'] == true),
+          child: SelectSetting(
+            title: "Refresh Color".tl,
+            settingKey: "eInkRefreshColor",
+            optionTranslation: {
+              "black": "Black".tl,
+              "white": "White".tl,
+            },
+            onChanged: () {
+              setState(() {});
+              widget.onChanged?.call("eInkRefreshColor");
+            },
+            comicId: isEnabledSpecificSettings ? widget.comicId : null,
+            comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
+            useDeviceSettings: useDeviceSpecificSettings,
+          ),
+        ),
+        SliverAnimatedVisibility(
+          visible: appdata.settings.getReaderSetting(
+                comicId ?? '',
+                sourceKey ?? '',
+                'enableEInkRefresh',
+              ) == true ||
+              (comicId == null && appdata.settings['enableEInkRefresh'] == true),
+          child: _SliderSetting(
+            title: "Refresh Duration".tl,
+            subtitle: "Milliseconds".tl,
+            settingsIndex: "eInkRefreshDuration",
+            interval: 50,
+            min: 100,
+            max: 1000,
+            onChanged: () {
+              setState(() {});
+              widget.onChanged?.call("eInkRefreshDuration");
+            },
+            comicId: isEnabledSpecificSettings ? widget.comicId : null,
+            comicSource: isEnabledSpecificSettings ? widget.comicSource : null,
+            useDeviceSettings: useDeviceSpecificSettings,
+          ),
+        ),
       ],
     );
   }

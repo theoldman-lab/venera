@@ -59,6 +59,55 @@ part 'chapters.dart';
 
 part 'chapter_comments.dart';
 
+/// E-Ink screen refresh overlay widget
+class _EInkRefreshOverlay extends StatefulWidget {
+  const _EInkRefreshOverlay({
+    required this.color,
+    required this.duration,
+  });
+
+  final Color color;
+  final int duration;
+
+  @override
+  State<_EInkRefreshOverlay> createState() => _EInkRefreshOverlayState();
+}
+
+class _EInkRefreshOverlayState extends State<_EInkRefreshOverlay>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: Duration(milliseconds: widget.duration ~/ 2),
+      vsync: this,
+    );
+    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
+    _controller.forward().then((_) {
+      _controller.reverse();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _animation,
+      child: Container(
+        color: widget.color,
+      ),
+    );
+  }
+}
+
 extension _ReaderContext on BuildContext {
   _ReaderState get reader => findAncestorStateOfType<_ReaderState>()!;
 

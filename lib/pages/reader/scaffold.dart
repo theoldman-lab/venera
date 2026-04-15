@@ -127,6 +127,27 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
   @override
   Widget build(BuildContext context) {
     final isOnChapterCommentsPage = context.reader.isOnChapterCommentsPage;
+    
+    // Check if E-Ink refresh is enabled
+    bool enableEInkRefresh = appdata.settings.getReaderSetting(
+      context.reader.cid,
+      context.reader.type.sourceKey,
+      'enableEInkRefresh',
+    );
+    
+    String eInkColorStr = appdata.settings.getReaderSetting(
+      context.reader.cid,
+      context.reader.type.sourceKey,
+      'eInkRefreshColor',
+    ) ?? 'black';
+    Color eInkColor = eInkColorStr == 'white' ? Colors.white : Colors.black;
+    
+    int eInkDuration = appdata.settings.getReaderSetting(
+      context.reader.cid,
+      context.reader.type.sourceKey,
+      'eInkRefreshDuration',
+    ) ?? 200;
+    
     return Stack(
       children: [
         Positioned.fill(
@@ -135,6 +156,16 @@ class _ReaderScaffoldState extends State<_ReaderScaffold> {
             child: widget.child,
           ),
         ),
+        // E-Ink refresh overlay
+        if (enableEInkRefresh && context.reader.isPageAnimating)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: _EInkRefreshOverlay(
+                color: eInkColor,
+                duration: eInkDuration,
+              ),
+            ),
+          ),
         if (appdata.settings['showPageNumberInReader'] == true && !isOnChapterCommentsPage)
           buildPageInfoText(),
         if (!isOnChapterCommentsPage)

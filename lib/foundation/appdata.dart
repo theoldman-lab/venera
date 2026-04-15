@@ -237,6 +237,9 @@ class Settings with ChangeNotifier {
     'showChapterComments': true, // show chapter comments in reader
     'showChapterCommentsAtEnd':
         false, // show chapter comments at end of chapter
+    'enableEInkRefresh': false, // enable E-Ink screen refresh on page turn
+    'eInkRefreshColor': 'black', // black or white
+    'eInkRefreshDuration': 200, // in milliseconds
   };
 
   operator [](String key) {
