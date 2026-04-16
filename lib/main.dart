@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flex_seed_scheme/flex_seed_scheme.dart';
 import 'package:flutter/material.dart';
@@ -9,48 +8,17 @@ import 'package:venera/foundation/log.dart';
 import 'package:venera/pages/auth_page.dart';
 import 'package:venera/pages/main_page.dart';
 import 'package:venera/utils/io.dart';
-import 'package:window_manager/window_manager.dart';
 import 'components/components.dart';
-import 'components/window_frame.dart';
 import 'foundation/app.dart';
 import 'foundation/appdata.dart';
-import 'headless.dart';
 import 'init.dart';
 
 void main(List<String> args) {
-  if (args.contains('--headless')) {
-    runHeadlessMode(args);
-    return;
-  }
-  if (runWebViewTitleBarWidget(args)) return;
   overrideIO(() {
     runZonedGuarded(() async {
       WidgetsFlutterBinding.ensureInitialized();
       await init();
       runApp(const MyApp());
-      if (App.isDesktop) {
-        await windowManager.ensureInitialized();
-        windowManager.waitUntilReadyToShow().then((_) async {
-          await windowManager.setTitleBarStyle(
-            TitleBarStyle.hidden,
-            windowButtonVisibility: App.isMacOS,
-          );
-          if (App.isLinux) {
-            await windowManager.setBackgroundColor(Colors.transparent);
-          }
-          await windowManager.setMinimumSize(const Size(500, 600));
-          var placement = await WindowPlacement.loadFromFile();
-          if (App.isLinux) {
-            await windowManager.show();
-            await placement.applyToWindow();
-          } else {
-            await placement.applyToWindow();
-            await windowManager.show();
-          }
-
-          WindowPlacement.loop();
-        });
-      }
     }, (error, stack) {
       Log.error("Unhandled Exception", error, stack);
     });
@@ -80,7 +48,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!App.isMobile || !appdata.settings['authorizationRequired']) {
+    if (!appdata.settings['authorizationRequired']) {
       return;
     }
     if (state == AppLifecycleState.inactive && hideContentOverlay == null) {
@@ -147,21 +115,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     Color? tertiary,
     Brightness brightness,
   ) {
-    String? font;
-    List<String>? fallback;
-    if (App.isLinux || App.isWindows) {
-      font = 'Noto Sans CJK';
-      fallback = [
-        'Segoe UI',
-        'Noto Sans SC',
-        'Noto Sans TC',
-        'Noto Sans',
-        'Microsoft YaHei',
-        'PingFang SC',
-        'Arial',
-        'sans-serif'
-      ];
-    }
     return ThemeData(
       colorScheme: SeedColorScheme.fromSeeds(
         primaryKey: primary,
@@ -170,8 +123,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         brightness: brightness,
         tones: FlexTones.vividBackground(brightness),
       ),
-      fontFamily: font,
-      fontFamilyFallback: fallback,
     );
   }
 
@@ -265,21 +216,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             }
 
             widget = OverlayWidget(widget);
-            if (App.isDesktop) {
-              widget = Shortcuts(
-                shortcuts: {
-                  LogicalKeySet(LogicalKeyboardKey.escape): VoidCallbackIntent(
-                    App.pop,
-                  ),
-                },
-                child: MouseBackDetector(
-                  onTapDown: App.pop,
-                  child: WindowFrame(widget),
-                ),
-              );
-            }
             return _SystemUiProvider(Material(
-              color: App.isLinux ? Colors.transparent : null,
+              color: Colors.transparent,
               child: widget,
             ));
           }

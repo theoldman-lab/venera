@@ -5,6 +5,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:venera/foundation/app.dart';
 import 'package:venera/foundation/appdata.dart';
 import 'package:venera/foundation/consts.dart';
+import 'package:venera/foundation/desktop_webview.dart';
 import 'package:venera/foundation/log.dart';
 import 'package:venera/pages/webview.dart';
 import 'package:venera/utils/ext.dart';
@@ -142,7 +143,7 @@ void passCloudflare(CloudflareException e, void Function() onFinished) async {
             "Cloudflare",
             "Cloudflare is passed due to there is no challenge css",
           );
-          var ua = controller.userAgent;
+          var ua = await controller.userAgent;
           if (ua != null) {
             appdata.implicitData['ua'] = ua;
             appdata.writeImplicitData();

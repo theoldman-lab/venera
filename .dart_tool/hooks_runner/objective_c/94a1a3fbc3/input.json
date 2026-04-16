@@ -1,0 +1,29 @@
+{
+  "assets": {},
+  "config": {
+    "build_asset_types": [
+      "code_assets/code"
+    ],
+    "extensions": {
+      "code_assets": {
+        "android": {
+          "target_ndk_api": 24
+        },
+        "c_compiler": {
+          "ar": "/home/dkx/Android/Sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar",
+          "cc": "/home/dkx/Android/Sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/clang",
+          "ld": "/home/dkx/Android/Sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/ld.lld"
+        },
+        "link_mode_preference": "dynamic",
+        "target_architecture": "arm64",
+        "target_os": "android"
+      }
+    },
+    "linking_enabled": false
+  },
+  "out_dir_shared": "/home/dkx/StudioProjects/venera/.dart_tool/hooks_runner/shared/objective_c/build/",
+  "out_file": "/home/dkx/StudioProjects/venera/.dart_tool/hooks_runner/objective_c/94a1a3fbc3/output.json",
+  "package_name": "objective_c",
+  "package_root": "/home/dkx/.pub-cache/hosted/pub.flutter-io.cn/objective_c-9.3.0/",
+  "user_defines": {}
+}

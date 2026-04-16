@@ -1,10 +1,12 @@
 ```gitignore
-# Scripts and executables
-*.sh
-*.ps1
-
-# Logs
+# Scripts and executables (except our build scripts)
 *.log
+
+# Android
+android/local.properties
+android/key.properties
+android/**/*.keystore
+android/**/*.jks
 
 # Environment files
 .env
@@ -17,6 +19,7 @@ venv/
 .venv/
 __pycache__/
 *.egg-info/
+.qwen
 
 # Build artifacts
 dist/

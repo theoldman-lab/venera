@@ -1,0 +1,1 @@
+ /home/dkx/StudioProjects/venera/.dart_tool/flutter_build/250864cc9c9078d6edb30855e9f00918/native_assets.json: 

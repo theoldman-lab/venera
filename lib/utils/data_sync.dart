@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:venera/components/components.dart';
-import 'package:venera/components/window_frame.dart';
 import 'package:venera/foundation/app.dart';
 import 'package:venera/foundation/appdata.dart';
 import 'package:venera/foundation/comic_source/comic_source.dart';
@@ -22,40 +21,12 @@ class DataSync with ChangeNotifier {
     }
     LocalFavoritesManager().addListener(onDataChanged);
     ComicSourceManager().addListener(onDataChanged);
-    if (App.isDesktop) {
-      Future.delayed(const Duration(seconds: 1), () {
-        var controller = WindowFrame.of(App.rootContext);
-        controller.addCloseListener(_handleWindowClose);
-      });
-    }
   }
 
   void onDataChanged() {
     if (isEnabled) {
       uploadData();
     }
-  }
-
-  bool _handleWindowClose() {
-    if (_isUploading) {
-      _showWindowCloseDialog();
-      return false;
-    }
-    return true;
-  }
-
-  void _showWindowCloseDialog() async {
-    showLoadingDialog(
-      App.rootContext,
-      cancelButtonText: "Shut Down".tl,
-      onCancel: () => exit(0),
-      barrierDismissible: false,
-      message: "Uploading data...".tl,
-    );
-    while (_isUploading) {
-      await Future.delayed(const Duration(milliseconds: 50));
-    }
-    exit(0);
   }
 
   static DataSync? instance;

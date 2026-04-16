@@ -376,6 +376,7 @@ class _EndSelectorSelectSettingState extends State<_EndSelectorSelectSetting> {
 class _SliderSetting extends StatefulWidget {
   const _SliderSetting({
     required this.title,
+    this.subtitle,
     required this.settingsIndex,
     required this.interval,
     required this.min,
@@ -387,6 +388,8 @@ class _SliderSetting extends StatefulWidget {
   });
 
   final String title;
+
+  final String? subtitle;
 
   final String settingsIndex;
 
@@ -424,55 +427,109 @@ class _SliderSettingState extends State<_SliderSetting> {
             .toDouble();
     return ListTile(
       title: Text(widget.title, softWrap: true, maxLines: 2),
-      trailing: Text(value.toString(), style: ts.s12),
-      subtitle: Slider(
-        value: value,
-        onChanged: (value) {
-          if (value.toInt() == value) {
-            setState(() {
-              if (widget.comicId != null) {
-                appdata.settings.setReaderSetting(
-                  widget.comicId!,
-                  widget.comicSource!,
-                  widget.settingsIndex,
-                  value.toInt(),
-                );
-              } else if (widget.useDeviceSettings) {
-                appdata.settings.setDeviceReaderSetting(
-                  widget.settingsIndex,
-                  value.toInt(),
-                );
-              } else {
-                appdata.settings[widget.settingsIndex] = value.toInt();
-              }
-              appdata.saveData();
-            });
-          } else {
-            setState(() {
-              if (widget.comicId != null) {
-                appdata.settings.setReaderSetting(
-                  widget.comicId!,
-                  widget.comicSource!,
-                  widget.settingsIndex,
-                  value,
-                );
-              } else if (widget.useDeviceSettings) {
-                appdata.settings.setDeviceReaderSetting(
-                  widget.settingsIndex,
-                  value,
-                );
-              } else {
-                appdata.settings[widget.settingsIndex] = value;
-              }
-              appdata.saveData();
-            });
-          }
-          widget.onChanged?.call();
-        },
-        divisions: ((widget.max - widget.min) / widget.interval).toInt(),
-        min: widget.min,
-        max: widget.max,
-      ),
+      subtitle: widget.subtitle != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.subtitle!, style: ts.s12),
+                Slider(
+                  value: value,
+                  onChanged: (value) {
+                    if (value.toInt() == value) {
+                      setState(() {
+                        if (widget.comicId != null) {
+                          appdata.settings.setReaderSetting(
+                            widget.comicId!,
+                            widget.comicSource!,
+                            widget.settingsIndex,
+                            value.toInt(),
+                          );
+                        } else if (widget.useDeviceSettings) {
+                          appdata.settings.setDeviceReaderSetting(
+                            widget.settingsIndex,
+                            value.toInt(),
+                          );
+                        } else {
+                          appdata.settings[widget.settingsIndex] = value.toInt();
+                        }
+                        appdata.saveData();
+                      });
+                    } else {
+                      setState(() {
+                        if (widget.comicId != null) {
+                          appdata.settings.setReaderSetting(
+                            widget.comicId!,
+                            widget.comicSource!,
+                            widget.settingsIndex,
+                            value,
+                          );
+                        } else if (widget.useDeviceSettings) {
+                          appdata.settings.setDeviceReaderSetting(
+                            widget.settingsIndex,
+                            value,
+                          );
+                        } else {
+                          appdata.settings[widget.settingsIndex] = value;
+                        }
+                        appdata.saveData();
+                      });
+                    }
+                    widget.onChanged?.call();
+                  },
+                  divisions: ((widget.max - widget.min) / widget.interval).toInt(),
+                  min: widget.min,
+                  max: widget.max,
+                ),
+              ],
+            )
+          : Slider(
+              value: value,
+              onChanged: (value) {
+                if (value.toInt() == value) {
+                  setState(() {
+                    if (widget.comicId != null) {
+                      appdata.settings.setReaderSetting(
+                        widget.comicId!,
+                        widget.comicSource!,
+                        widget.settingsIndex,
+                        value.toInt(),
+                      );
+                    } else if (widget.useDeviceSettings) {
+                      appdata.settings.setDeviceReaderSetting(
+                        widget.settingsIndex,
+                        value.toInt(),
+                      );
+                    } else {
+                      appdata.settings[widget.settingsIndex] = value.toInt();
+                    }
+                    appdata.saveData();
+                  });
+                } else {
+                  setState(() {
+                    if (widget.comicId != null) {
+                      appdata.settings.setReaderSetting(
+                        widget.comicId!,
+                        widget.comicSource!,
+                        widget.settingsIndex,
+                        value,
+                      );
+                    } else if (widget.useDeviceSettings) {
+                      appdata.settings.setDeviceReaderSetting(
+                        widget.settingsIndex,
+                        value,
+                      );
+                    } else {
+                      appdata.settings[widget.settingsIndex] = value;
+                    }
+                    appdata.saveData();
+                  });
+                }
+                widget.onChanged?.call();
+              },
+              divisions: ((widget.max - widget.min) / widget.interval).toInt(),
+              min: widget.min,
+              max: widget.max,
+            ),
     );
   }
 }

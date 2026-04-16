@@ -1,36 +1,30 @@
-# Due to my limited time and energy, this project is no longer maintained. Feel free to fork it.
-# 由于本人精力有限，此项目已停止维护，欢迎 fork
+# Venera
 
-# venera
-[![flutter](https://img.shields.io/badge/flutter-3.41.4-blue)](https://flutter.dev/)
-[![License](https://img.shields.io/github/license/venera-app/venera)](https://github.com/venera-app/venera/blob/master/LICENSE)
-[![stars](https://img.shields.io/github/stars/venera-app/venera?style=flat)](https://github.com/venera-app/venera/stargazers)
+一个 Android 漫画阅读应用。
 
-[![Download](https://img.shields.io/github/v/release/venera-app/venera)](https://github.com/venera-app/venera/releases)
-[![AUR Version](https://img.shields.io/aur/version/venera-bin)](https://aur.archlinux.org/packages/venera-bin)
-[![F-Droid Version](https://img.shields.io/f-droid/v/com.github.wgh136.venera)](https://f-droid.org/packages/com.github.wgh136.venera/)
+## 功能
+- 阅读本地漫画
+- 使用 JavaScript 创建漫画源
+- 阅读网络漫画源
+- 管理收藏夹
+- 下载漫画
+- 查看评论、标签等信息
+- 登录评论、评分等操作
 
-A comic reader that support reading local and network comics.
+## 快速开始
 
-## Features
-- Read local comics
-- Use javascript to create comic sources
-- Read comics from network sources
-- Manage favorite comics
-- Download comics
-- View comments, tags, and other information of comics if the source supports
-- Login to comment, rate, and other operations if the source supports
-
-## Quick Start
-
-### 1. Clone the repository
+### 1. 克隆仓库
 
 ```bash
 git clone https://github.com/venera-app/venera.git
 cd venera
 ```
 
-### 2. Setup environment
+### 2. 配置环境
+
+**详细安装指南：** 请参阅 [scripts/INSTALL.md](scripts/INSTALL.md) 获取各平台的详细安装说明。
+
+**快速配置：**
 
 **Linux/macOS:**
 ```bash
@@ -42,90 +36,72 @@ cd venera
 .\scripts\setup.ps1
 ```
 
-Or manually follow the [Setup Guide](SETUP_GUIDE.md).
-
-### 3. Build for your platform
+### 3. 构建应用
 
 **Linux/macOS:**
 ```bash
-./scripts/build.sh all
+# 调试版
+./scripts/build.sh debug
+
+# 发布版（按 CPU 架构分割）
+./scripts/build.sh split
 ```
 
 **Windows (PowerShell):**
 ```powershell
-.\scripts\build.ps1 all
+# 调试版
+.\scripts\build.ps1 debug
+
+# 发布版（按 CPU 架构分割）
+.\scripts\build.ps1 split
 ```
 
-Or use Flutter directly: `flutter build apk`, `flutter build ios`, etc.
+## 环境要求
 
-## Documentation
+| 组件 | 版本 | 说明 |
+|------|------|------|
+| Flutter | 3.41.4 | 跨平台框架 |
+| Java | JDK 17 | Android 构建 |
+| Gradle | 8.13 | 自动下载 |
+| Android Gradle Plugin | 8.12.3 | 自动配置 |
+| Kotlin | 2.1.0 | 自动配置 |
+| Android SDK | API 35 | 包含 platform-tools |
+| Android NDK | 28.0.13004108 | 原生库支持 |
 
-- **[Setup Guide](SETUP_GUIDE.md)** - Complete environment setup instructions
-- **[Comic Source](doc/comic_source.md)** - Create new comic sources
-- **[Headless Mode](doc/headless_doc.md)** - Run in headless mode
-- **[Import Comics](doc/import_comic.md)** - Import comic files
-- **[JS API](doc/js_api.md)** - JavaScript API reference
+## 构建
 
-## Build from source
-
-### Prerequisites
-
-- **Flutter** 3.41.4 (see [flutter.dev](https://flutter.dev/docs/get-started/install))
-- **Rust** 1.85.1 (see [rustup.rs](https://rustup.rs/))
-- **Java** 17 (for Android builds)
-
-### Platform-specific requirements
-
-#### Android
-- Android Studio with SDK and NDK
-- Run `flutter doctor --android-licenses` to accept licenses
-
-#### iOS (macOS only)
-- Xcode 16.4+
-- CocoaPods: `sudo gem install cocoapods`
-
-#### Linux
-```bash
-sudo apt install -y ninja-build libgtk-3-dev webkit2gtk-4.1
-```
-
-#### Windows
-- Visual Studio Build Tools with C++ workload
-- Inno Setup (for creating installers)
-
-### Build commands
+### 手动构建
 
 ```bash
-# Get dependencies
+# 获取依赖
 flutter pub get
 
-# Build
-flutter build apk          # Android
-flutter build ios          # iOS
-flutter build macos        # macOS
-flutter build linux        # Linux
-flutter build windows      # Windows
+# 构建调试版
+flutter build apk --debug
+
+# 构建发布版
+flutter build apk --release
+
+# 按 CPU 架构分割构建
+flutter build apk --split-per-abi --release
 ```
 
-## Create a new comic source
+### 使用脚本
 
-See [Comic Source Documentation](doc/comic_source.md)
+详见 [scripts/README.md](scripts/README.md)
 
-## Thanks
+## 文档
 
-### Tags Translation
+- **[Comic Source](doc/comic_source.md)** - 创建新的漫画源
+- **[JS API](doc/js_api.md)** - JavaScript API 参考
+
+## 致谢
+
+### 标签翻译
 [EhTagTranslation](https://github.com/EhTagTranslation/Database)
 
-The Chinese translation of the manga tags is from this project.
-
-## Headless Mode
-
-See [Headless Documentation](doc/headless_doc.md)
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit pull requests or report issues.
+漫画标签中文翻译来自此项目。
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - 详见 [LICENSE](LICENSE) 文件。
