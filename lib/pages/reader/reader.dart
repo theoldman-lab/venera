@@ -15,6 +15,7 @@ import 'package:photo_view/photo_view_gallery.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:venera/components/components.dart';
 import 'package:venera/components/custom_slider.dart';
+import 'package:venera/components/eink_refresh_overlay.dart';
 import 'package:venera/components/rich_comment_content.dart';
 import 'package:venera/foundation/app.dart';
 import 'package:venera/foundation/appdata.dart';
@@ -56,55 +57,6 @@ part 'loading.dart';
 part 'chapters.dart';
 
 part 'chapter_comments.dart';
-
-/// E-Ink screen refresh overlay widget
-class _EInkRefreshOverlay extends StatefulWidget {
-  const _EInkRefreshOverlay({
-    required this.color,
-    required this.duration,
-  });
-
-  final Color color;
-  final int duration;
-
-  @override
-  State<_EInkRefreshOverlay> createState() => _EInkRefreshOverlayState();
-}
-
-class _EInkRefreshOverlayState extends State<_EInkRefreshOverlay>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: Duration(milliseconds: widget.duration ~/ 2),
-      vsync: this,
-    );
-    _animation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
-    _controller.forward().then((_) {
-      _controller.reverse();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: Container(
-        color: widget.color,
-      ),
-    );
-  }
-}
 
 extension _ReaderContext on BuildContext {
   _ReaderState get reader => findAncestorStateOfType<_ReaderState>()!;
@@ -157,9 +109,67 @@ class Reader extends StatefulWidget {
 
 class _ReaderState extends State<Reader>
     with _ReaderLocation, _ReaderWindow, _VolumeListener, _ImagePerPageHandler {
+  // E-Ink 刷新触发标识（用于强制重建 Widget）
+  int _einkTriggerKey = 0;
+  
+  // E-Ink 刷新状态
+  bool _einkIsShowing = false;
+  Color _einkColor = Colors.black;
+  int _einkDuration = 200;
+
   @override
   void update() {
     setState(() {});
+  }
+
+  /// 触发 E-Ink 刷新
+  @override
+  void triggerEInkRefresh() {
+    bool? enable = appdata.settings.getReaderSetting(cid, type.sourceKey, 'enableEInkRefresh');
+    // 如果设置为 null，使用全局设置
+    enable ??= appdata.settings['enableEInkRefresh'] == true;
+    if (!enable) {
+      return;
+    }
+
+    // 如果正在显示，先隐藏再触发
+    if (_einkIsShowing) {
+      _einkIsShowing = false;
+    }
+
+    String? eInkColorStr = appdata.settings.getReaderSetting(
+      cid,
+      type.sourceKey,
+      'eInkRefreshColor',
+    );
+    // 如果设置为 null，使用全局设置
+    eInkColorStr ??= appdata.settings['eInkRefreshColor'];
+    eInkColorStr ??= 'black';
+    Color eInkColor = eInkColorStr == 'white' ? Colors.white : Colors.black;
+
+    int? eInkDuration = appdata.settings.getReaderSetting(
+      cid,
+      type.sourceKey,
+      'eInkRefreshDuration',
+    );
+    // 如果设置为 null，使用全局设置
+    eInkDuration ??= appdata.settings['eInkRefreshDuration'];
+    int eInkDurationValue = eInkDuration ?? 200;
+
+    // 更新状态并触发刷新
+    setState(() {
+      _einkTriggerKey++;
+      _einkColor = eInkColor;
+      _einkDuration = eInkDurationValue;
+      _einkIsShowing = true;
+    });
+  }
+
+  /// 隐藏 E-Ink 刷新覆盖层
+  void _hideEInkRefresh() {
+    setState(() {
+      _einkIsShowing = false;
+    });
   }
 
   /// The maximum page number for images only (excluding chapter comments page).
@@ -335,23 +345,36 @@ class _ReaderState extends State<Reader>
   @override
   Widget build(BuildContext context) {
     _checkImagesPerPageChange();
-    return KeyboardListener(
-      focusNode: focusNode,
-      autofocus: true,
-      onKeyEvent: onKeyEvent,
-      child: Overlay(
-        initialEntries: [
-          OverlayEntry(
-            builder: (context) {
-              return _ReaderScaffold(
-                child: _ReaderGestureDetector(
-                  child: _ReaderImages(key: Key(chapter.toString())),
-                ),
-              );
-            },
+    return Stack(
+      children: [
+        KeyboardListener(
+          focusNode: focusNode,
+          autofocus: true,
+          onKeyEvent: onKeyEvent,
+          child: Overlay(
+            initialEntries: [
+              OverlayEntry(
+                builder: (context) {
+                  return _ReaderScaffold(
+                    child: _ReaderGestureDetector(
+                      child: _ReaderImages(key: Key(chapter.toString())),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+        // E-Ink 刷新覆盖层 - 在最顶层
+        if (_einkIsShowing)
+          EinkRefreshOverlay(
+            key: ValueKey('eink_$_einkTriggerKey'),
+            triggerKey: _einkTriggerKey,
+            color: _einkColor,
+            duration: _einkDuration,
+            onAnimationComplete: _hideEInkRefresh,
+          ),
+      ],
     );
   }
 
@@ -667,6 +690,9 @@ abstract mixin class _ReaderLocation {
 
   void update();
 
+  /// Trigger E-Ink refresh overlay
+  void triggerEInkRefresh();
+
   bool enablePageAnimation(String cid, ComicType type) => appdata.settings
       .getReaderSetting(cid, type.sourceKey, 'enablePageAnimation');
 
@@ -720,6 +746,8 @@ abstract mixin class _ReaderLocation {
         update();
         _imageViewController!.toPage(page);
       }
+      // Trigger E-Ink refresh overlay on every page turn (independent of page animation)
+      triggerEInkRefresh();
       return true;
     }
     return false;
@@ -748,6 +776,8 @@ abstract mixin class _ReaderLocation {
       page = 1;
       _jumpToLastPageOnLoad = toLastPage;
       update();
+      // 切换章节时也触发 E-Ink 刷新
+      triggerEInkRefresh();
       return true;
     }
     return false;

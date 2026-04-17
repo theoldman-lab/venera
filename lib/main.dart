@@ -217,7 +217,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
             widget = OverlayWidget(widget);
             return _SystemUiProvider(Material(
-              color: Colors.transparent,
+              color: Theme.of(context).colorScheme.surface,
               child: widget,
             ));
           }
