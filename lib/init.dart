@@ -10,6 +10,7 @@ import 'package:venera/foundation/cache_manager.dart';
 import 'package:venera/foundation/comic_source/comic_source.dart';
 import 'package:venera/foundation/js_engine.dart';
 import 'package:venera/foundation/log.dart';
+import 'package:venera/network/app_dio.dart';
 import 'package:venera/network/cookie_jar.dart';
 import 'package:venera/pages/comic_source_page.dart';
 import 'package:venera/pages/follow_updates_page.dart';
@@ -37,14 +38,35 @@ extension _FutureInit<T> on Future<T> {
 Future<void> init() async {
   await App.init().wait();
   await SingleInstanceCookieJar.createInstance();
+
+  // Initialize rhttp first (this also initializes flutter_rust_bridge)
+  // This must be done before any other code that uses network
+  try {
+    Log.info("init", "Starting Rhttp.init()...");
+    await Rhttp.init();
+    Log.info("init", "Rhttp.init() completed");
+    // Mark rhttp as initialized so AppDio can use RHttpAdapter
+    markRhttpInitialized();
+  } catch (e, s) {
+    Log.error("init", "Rhttp.init() failed: $e\n$s");
+  }
+
+  // Initialize JsEngine separately to ensure Rhttp is fully initialized
+  // JsEngine creates AppDio which uses RHttpAdapter
+  try {
+    Log.info("init", "Starting JsEngine.init()...");
+    await JsEngine().init().wait();
+    Log.info("init", "JsEngine.init() completed");
+  } catch (e, s) {
+    Log.error("init", "JsEngine.init() failed: $e\n$s");
+  }
+
   try {
     var futures = [
-      Rhttp.init(),
       App.initComponents(),
       SAFTaskWorker().init().wait(),
       AppTranslation.init().wait(),
       TagsTranslation.readData().wait(),
-      JsEngine().init().wait(),
       ComicSourceManager().init().wait(),
       OpenCC.init(),
     ];

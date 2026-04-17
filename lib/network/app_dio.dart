@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:flutter/services.dart';
 import 'package:rhttp/rhttp.dart' as rhttp;
 import 'package:venera/foundation/appdata.dart';
@@ -14,6 +15,17 @@ import 'cloudflare.dart';
 import 'cookie_jar.dart';
 
 export 'package:dio/dio.dart';
+
+// Track whether rhttp has been initialized
+bool _rhttpInitialized = false;
+
+/// Mark rhttp as initialized. Call this after Rhttp.init() completes.
+void markRhttpInitialized() {
+  _rhttpInitialized = true;
+}
+
+/// Check if rhttp is available
+bool get isRhttpAvailable => _rhttpInitialized;
 
 class MyLogInterceptor implements Interceptor {
   @override
@@ -128,7 +140,8 @@ class MyLogInterceptor implements Interceptor {
 class AppDio with DioMixin {
   AppDio([BaseOptions? options]) {
     this.options = options ?? BaseOptions();
-    httpClientAdapter = RHttpAdapter();
+    // Use RHttpAdapter if rhttp has been initialized, otherwise fallback to IOHttpClientAdapter
+    httpClientAdapter = _rhttpInitialized ? RHttpAdapter() : _FallbackHttpClientAdapter();
     if (App.isInitialized) {
       interceptors.add(CookieManagerSql(SingleInstanceCookieJar.instance!));
       interceptors.add(NetworkCacheManager());
@@ -277,5 +290,30 @@ class RHttpAdapter implements HttpClientAdapter {
         "Invalid Status Code 429: Too many requests. Please try again later.",
       _ => "Invalid Status Code $statusCode",
     };
+  }
+}
+
+/// A fallback HttpClientAdapter that uses the standard dart:io HTTP client.
+/// This is used when rhttp is not available or failed to initialize.
+class _FallbackHttpClientAdapter implements HttpClientAdapter {
+  final HttpClientAdapter _adapter = IOHttpClientAdapter();
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    // Add default User-Agent if not set
+    if (options.headers['User-Agent'] == null &&
+        options.headers['user-agent'] == null) {
+      options.headers['User-Agent'] = "venera/v${App.version}";
+    }
+    return _adapter.fetch(options, requestStream, cancelFuture);
+  }
+
+  @override
+  void close({bool force = false}) {
+    _adapter.close(force: force);
   }
 }
