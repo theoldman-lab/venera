@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io' as io;
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:venera/utils/ext.dart';
 
 /// A desktop webview wrapper for Linux platform
 /// This is a simplified implementation using flutter_inappwebview

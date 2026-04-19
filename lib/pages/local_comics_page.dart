@@ -416,9 +416,9 @@ class _LocalComicsPageState extends State<LocalComicsPage> {
                   },
                 ),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   context.pop();
-                  LocalManager().batchDeleteComics(
+                  await LocalManager().batchDeleteComics(
                     comics,
                     removeComicFile,
                     removeFavoriteAndHistory,
@@ -619,10 +619,8 @@ void showDeleteChaptersPopWindow(BuildContext context, LocalComic comic) {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   FilledButton(
-                    onPressed: () {
-                      Future.delayed(const Duration(milliseconds: 200), () {
-                        LocalManager().deleteComicChapters(comic, chapters);
-                      });
+                    onPressed: () async {
+                      await LocalManager().deleteComicChapters(comic, chapters);
                       App.rootContext.pop();
                     },
                     child: Text("Submit".tl),

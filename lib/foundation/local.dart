@@ -1,12 +1,11 @@
 import 'dart:convert';
-import 'dart:isolate';
 
 import 'package:flutter/widgets.dart' show ChangeNotifier;
-import 'package:flutter_saf/flutter_saf.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 import 'package:venera/foundation/comic_source/comic_source.dart';
 import 'package:venera/foundation/comic_type.dart';
+import 'package:venera/foundation/delete_service.dart';
 import 'package:venera/foundation/favorites.dart';
 import 'package:venera/foundation/log.dart';
 import 'package:venera/network/download.dart';
@@ -558,10 +557,17 @@ class LocalManager with ChangeNotifier {
     downloadingTasks.first.resume();
   }
 
-  void deleteComic(LocalComic c, [bool removeFileOnDisk = true]) {
+  Future<void> deleteComic(LocalComic c, [bool removeFileOnDisk = true]) async {
     if (removeFileOnDisk) {
-      var dir = Directory(FilePath.join(path, c.directory));
-      dir.deleteIgnoreError(recursive: true);
+      // 使用 baseDir 而不是 FilePath.join(path, c.directory)
+      // 因为本地导入的漫画 directory 可能是绝对路径
+      var dir = Directory(c.baseDir);
+      if (dir.existsSync()) {
+        final result = await DeleteService().deleteDirectory(dir);
+        if (!result.success) {
+          Log.error("LocalManager", "Failed to delete comic directory: ${dir.path}\nReason: ${result.message}");
+        }
+      }
     }
     // Deleting a local comic means that it's no longer available, thus both favorite and history should be deleted.
     if (c.comicType == ComicType.local) {
@@ -577,7 +583,7 @@ class LocalManager with ChangeNotifier {
     notifyListeners();
   }
 
-  void deleteComicChapters(LocalComic c, List<String> chapters) {
+  Future<void> deleteComicChapters(LocalComic c, List<String> chapters) async {
     if (chapters.isEmpty) {
       return;
     }
@@ -610,26 +616,34 @@ class LocalManager with ChangeNotifier {
       }
     }
     if (shouldRemovedDirs.isNotEmpty) {
-      _deleteDirectories(shouldRemovedDirs);
+      await DeleteService().deleteDirectories(shouldRemovedDirs);
     }
     notifyListeners();
   }
 
-  void batchDeleteComics(List<LocalComic> comics, [bool removeFileOnDisk = true, bool removeFavoriteAndHistory = true]) {
+  Future<void> batchDeleteComics(List<LocalComic> comics, [bool removeFileOnDisk = true, bool removeFavoriteAndHistory = true]) async {
     if (comics.isEmpty) {
       return;
     }
 
     var shouldRemovedDirs = <Directory>[];
+
+    // 先收集需要删除的目录
+    // 使用 baseDir 而不是 FilePath.join(path, c.directory)
+    // 因为本地导入的漫画 directory 可能是绝对路径
+    if (removeFileOnDisk) {
+      for (var c in comics) {
+        var dir = Directory(c.baseDir);
+        if (dir.existsSync()) {
+          shouldRemovedDirs.add(dir);
+        }
+      }
+    }
+
+    // 删除数据库记录
     _db.execute('BEGIN TRANSACTION;');
     try {
       for (var c in comics) {
-        if (removeFileOnDisk) {
-          var dir = Directory(FilePath.join(path, c.directory));
-          if (dir.existsSync()) {
-            shouldRemovedDirs.add(dir);
-          }
-        }
         _db.execute(
           'DELETE FROM comics WHERE id = ? AND comic_type = ?;',
           [c.id, c.comicType.value],
@@ -637,7 +651,7 @@ class LocalManager with ChangeNotifier {
       }
     }
     catch(e, s) {
-      Log.error("LocalManager", "Failed to batch delete comics: $e", s);
+      Log.error("LocalManager", "Failed to batch delete comics from database: $e", s);
       _db.execute('ROLLBACK;');
       return;
     }
@@ -645,6 +659,7 @@ class LocalManager with ChangeNotifier {
 
     var comicIDs = comics.map((e) => ComicID(e.comicType, e.id)).toList();
 
+    // 删除收藏和历史记录
     if (removeFavoriteAndHistory) {
       LocalFavoritesManager().batchDeleteComicsInAllFolders(comicIDs);
       HistoryManager().batchDeleteHistories(comicIDs);
@@ -652,25 +667,14 @@ class LocalManager with ChangeNotifier {
 
     notifyListeners();
 
-    if (removeFileOnDisk) {
-      _deleteDirectories(shouldRemovedDirs);
-    }
-  }
-
-  /// Deletes the directories in a separate isolate to avoid blocking the UI thread.
-  static void _deleteDirectories(List<Directory> directories) {
-    Isolate.run(() async {
-      await SAFTaskWorker().init();
-      for (var dir in directories) {
-        try {
-          if (dir.existsSync()) {
-            await dir.delete(recursive: true);
-          }
-        } catch (e) {
-          continue;
-        }
+    // 最后删除文件（文件删除失败不影响数据库状态）
+    if (removeFileOnDisk && shouldRemovedDirs.isNotEmpty) {
+      final results = await DeleteService().deleteDirectories(shouldRemovedDirs);
+      final failedCount = results.where((r) => !r.success).length;
+      if (failedCount > 0) {
+        Log.error("LocalManager", "Failed to delete $failedCount out of ${results.length} directories");
       }
-    });
+    }
   }
 
   static String getChapterDirectoryName(String name) {

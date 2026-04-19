@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:venera/components/components.dart';
 import 'package:venera/foundation/app.dart';
 import 'package:venera/foundation/appdata.dart';
 import 'package:venera/foundation/comic_source/comic_source.dart';
@@ -10,7 +9,6 @@ import 'package:venera/network/app_dio.dart';
 import 'package:venera/utils/data.dart';
 import 'package:venera/utils/ext.dart';
 import 'package:webdav_client/webdav_client.dart' hide File;
-import 'package:venera/utils/translations.dart';
 
 import 'io.dart';
 

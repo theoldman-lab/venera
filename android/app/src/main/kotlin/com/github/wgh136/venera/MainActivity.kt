@@ -136,6 +136,70 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                 }
 
+                "deleteDirectory" -> {
+                    val path = call.argument<String>("path")
+                    if (path != null) {
+                        try {
+                            val dir = File(path)
+                            if (dir.exists()) {
+                                dir.deleteRecursively()
+                                Log.i("Venera", "Successfully deleted directory: ${path}")
+                                res.success(true)
+                            } else {
+                                Log.w("Venera", "Directory does not exist: ${path}")
+                                res.success(false)
+                            }
+                        } catch (e: Exception) {
+                            Log.e("Venera", "Failed to delete directory: ${path}, error: ${e.message}", e)
+                            res.error("DELETE_ERROR", e.message, null)
+                        }
+                    } else {
+                        Log.e("Venera", "deleteDirectory called with null path")
+                        res.error("INVALID_PATH", "Path is null", null)
+                    }
+                }
+
+                "deleteDirectories" -> {
+                    val paths = call.argument<List<String>>("paths")
+                    if (paths != null) {
+                        val results = mutableListOf<Map<String, Any>>()
+                        for (path in paths) {
+                            try {
+                                val dir = File(path)
+                                val result = mutableMapOf<String, Any>("path" to path)
+                                if (dir.exists()) {
+                                    if (dir.deleteRecursively()) {
+                                        result["success"] = true
+                                        result["message"] = "Deleted successfully"
+                                        Log.i("Venera", "Successfully deleted directory: ${path}")
+                                    } else {
+                                        result["success"] = false
+                                        result["message"] = "deleteRecursively returned false"
+                                        Log.w("Venera", "deleteRecursively returned false for: ${path}")
+                                    }
+                                } else {
+                                    result["success"] = false
+                                    result["message"] = "Directory does not exist"
+                                    Log.w("Venera", "Directory does not exist: ${path}")
+                                }
+                                results.add(result)
+                            } catch (e: Exception) {
+                                val result = mutableMapOf<String, Any>(
+                                    "path" to path,
+                                    "success" to false,
+                                    "message" to (e.message ?: "Unknown error")
+                                )
+                                results.add(result)
+                                Log.e("Venera", "Failed to delete directory: ${path}, error: ${e.message}", e)
+                            }
+                        }
+                        res.success(results.map { it.toMap() })
+                    } else {
+                        Log.e("Venera", "deleteDirectories called with null paths")
+                        res.error("INVALID_PATH", "Paths is null", null)
+                    }
+                }
+
                 else -> res.notImplemented()
             }
         }
