@@ -106,6 +106,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     LocalManager().removeTask(this);
     var local = LocalManager().find(id, comicType);
     if (path != null) {
+      ImageDownloader.cancelAllLoadingImages();
       if (local == null) {
         Future.sync(() async {
           var tasks = this.tasks.values.toList();
@@ -122,11 +123,15 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
             Log.error("Download", "Failed to delete directory: $e");
           }
         });
-      } else if (chapters != null) {
-        for (var c in chapters!) {
-          var dir = Directory(FilePath.join(path!, c));
-          if (dir.existsSync()) {
-            dir.deleteSync(recursive: true);
+      } else {
+        var targetChapters = chapters ?? _images?.keys.toList();
+        if (targetChapters != null) {
+          for (var c in targetChapters) {
+            var dir = Directory(FilePath.join(
+                path!, LocalManager.getChapterDirectoryName(c)));
+            if (dir.existsSync()) {
+              dir.deleteSync(recursive: true);
+            }
           }
         }
       }
@@ -147,6 +152,7 @@ class ImagesDownloadTask extends DownloadTask with _TransferSpeedMixin {
     _isRunning = false;
     _message = "Paused";
     _currentSpeed = 0;
+    ImageDownloader.cancelAllLoadingImages();
     var shouldMove = <int>[];
     for (var entry in tasks.entries) {
       if (!entry.value.isComplete) {
@@ -571,7 +577,7 @@ class _ImageDownloadWrapper {
       await for (var p in ImageDownloader.loadComicImageUnwrapped(
           image, task.source.key, task.comicId, chapter)) {
         if (isCancelled) {
-          return;
+          break;
         }
         task.onData(p.currentBytes - lastBytes);
         lastBytes = p.currentBytes;
@@ -587,22 +593,22 @@ class _ImageDownloadWrapper {
         }
       }
     } catch (e, s) {
-      if (isCancelled) {
-        return;
-      }
-      Log.error("Download", e.toString(), s);
-      retry--;
-      if (retry > 0) {
-        start();
-        return;
-      }
-      error = e.toString();
-      for (var c in completers) {
-        if (!c.isCompleted) {
-          c.complete(this);
+      if (!isCancelled) {
+        Log.error("Download", e.toString(), s);
+        retry--;
+        if (retry > 0) {
+          start();
+          return;
         }
+        error = e.toString();
       }
     }
+    for (var c in completers) {
+      if (!c.isCompleted) {
+        c.complete(this);
+      }
+    }
+    completers.clear();
   }
 
   Future<_ImageDownloadWrapper> wait() {

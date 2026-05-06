@@ -103,6 +103,38 @@ flutter build apk --split-per-abi --release
 
 漫画标签中文翻译来自此项目。
 
+## 更新日志
+
+### 2026-05-06
+
+#### 修复 WebDAV 同步上传失败（`flutter_rust_bridge` 未初始化）
+- **问题：** `rhttp` 初始化失败后，WebDAV 数据同步仍强制使用 `RHttpAdapter`，导致 `flutter_rust_bridge has not been initialized` 错误，上传/下载均不可用。
+- **修复：** `lib/utils/data_sync.dart` — 在创建 WebDAV 客户端时检查 `isRhttpAvailable`，未初始化时回退至 `IOHttpClientAdapter`（标准 dart:io HTTP），与 `AppDio` 保持一致。
+- **提交：** `0c6385b` `9ed2e78`
+
+#### 修复漫画下载取消后残留在磁盘的文件夹
+- **问题：** 下载失败后取消任务，已下载的漫画文件夹未能删除，堆积占用存储空间。
+- **根因分析（三处缺陷）：**
+  1. 取消时未调用 `ImageDownloader.cancelAllLoadingImages()` 释放阻塞的网络流，导致 `_ImageDownloadWrapper.wait()` 永久挂起，`Directory.delete()` 永远不会执行；
+  2. 章节目录创建时通过 `LocalManager.getChapterDirectoryName()` 消毒了特殊字符（`/\:*?"<>|` 替换为 `_`），但删除时直接使用原始章节名，导致 `existsSync()` 返回 false 而跳过删除；
+  3. 当漫画已存在于本地库且下载所有章节（`chapters == null`）时，取消操作无清理逻辑。
+- **修复：** `lib/network/download.dart`
+  - `cancel()` / `pause()`：新增 `ImageDownloader.cancelAllLoadingImages()` 调用，强制中断所有挂起的图片下载网络流；
+  - `cancel()`：章节删除路径统一使用 `LocalManager.getChapterDirectoryName()`，且补充 `chapters ?? _images?.keys` 作为删除目标回退；
+  - `_ImageDownloadWrapper.start()`：重构退出逻辑，将 `isCancelled` 时的 `return` 改为 `break`，所有退出路径（正常结束 / 取消 / 异常）统一通过 finally 块 resolve 所有 completer，彻底解除 `wait()` 挂起风险。
+- **提交：** 未提交（本次会话）
+
+#### 修复本地漫画无法删除磁盘文件
+- **问题：** 删除已下载的本地漫画时，磁盘上的目录文件未被清理。
+- **修复：** 使用 `DeleteService` 平台感知的目录删除逻辑，正确删除 `baseDir` 对应的本地文件。
+- **提交：** `0e8e5f1`
+
+#### 清理未使用变量
+- 移除 `desktop_webview.dart` 中未使用的 `_currentUrl` 字段及赋值。
+- 移除 `reader.dart` 中未使用的 `_isInit` 字段及赋值。
+
+---
+
 ## License
 
 MIT License - 详见 [LICENSE](LICENSE) 文件。

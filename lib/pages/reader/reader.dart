@@ -808,11 +808,9 @@ abstract mixin class _ReaderLocation {
 mixin class _ReaderWindow {
   bool isFullscreen = false;
 
-  bool _isInit = false;
 
   void initReaderWindow() {
     // Only available on desktop
-    _isInit = true;
   }
 
   void fullscreen() {

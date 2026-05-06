@@ -1,3 +1,4 @@
+import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
 import 'package:venera/foundation/app.dart';
 import 'package:venera/foundation/appdata.dart';
@@ -93,7 +94,9 @@ class DataSync with ChangeNotifier {
         url,
         user: user,
         password: pass,
-        adapter: RHttpAdapter(),
+        adapter: isRhttpAvailable
+            ? RHttpAdapter()
+            : IOHttpClientAdapter(),
       );
 
       try {
@@ -160,7 +163,9 @@ class DataSync with ChangeNotifier {
         url,
         user: user,
         password: pass,
-        adapter: RHttpAdapter(),
+        adapter: isRhttpAvailable
+            ? RHttpAdapter()
+            : IOHttpClientAdapter(),
       );
 
       try {

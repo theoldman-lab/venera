@@ -19,7 +19,6 @@ class DesktopWebview {
 
   InAppWebViewController? _controller;
   String _title = '';
-  String _currentUrl = '';
   bool _isOpen = false;
 
   /// Check if DesktopWebview is available
@@ -77,7 +76,6 @@ class DesktopWebview {
 
   /// Internal method to update url
   void _updateUrl(String url) {
-    _currentUrl = url;
     onNavigation?.call(url, this);
   }
 }
