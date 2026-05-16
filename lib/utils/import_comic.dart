@@ -13,12 +13,30 @@ import 'package:venera/utils/ext.dart';
 import 'package:venera/utils/translations.dart';
 import 'cbz.dart';
 import 'io.dart';
+import 'rename.dart';
 
 class ImportComic {
   final String? selectedFolder;
   final bool copyToLocal;
 
-  const ImportComic({this.selectedFolder, this.copyToLocal = true});
+  /// Whether to show the rename preview dialog before importing directories.
+  ///
+  /// When true (default), a dialog will appear showing the file ordering and
+  /// allowing the user to choose a [RenameStrategy] before import.
+  final bool enableRenamePreview;
+
+  /// Default rename strategy to pre-select in the preview dialog.
+  ///
+  /// When [enableRenamePreview] is false, this strategy is applied silently
+  /// (if non-null and not [NoRenameStrategy]). Set to `null` to skip rename.
+  final RenameStrategy? defaultRenameStrategy;
+
+  const ImportComic({
+    this.selectedFolder,
+    this.copyToLocal = true,
+    this.enableRenamePreview = true,
+    this.defaultRenameStrategy,
+  });
 
   Future<bool> cbz() async {
     var file = await selectFile(ext: ['cbz', 'zip', '7z', 'cb7']);
@@ -28,7 +46,37 @@ class ImportComic {
     }
     var controller = showLoadingDialog(App.rootContext, allowCancel: false);
     try {
-      var comic = await CBZ.import(File(file.path));
+      var archiveFile = File(file.path);
+      var cache = Directory(FilePath.join(App.cachePath, 'cbz_import'));
+      if (cache.existsSync()) cache.deleteSync(recursive: true);
+      cache.createSync();
+      await CBZ.extractArchive(archiveFile, cache);
+      var entries = cache.listSync();
+      if (entries.length == 1 && entries.first is Directory) {
+        cache = entries.first as Directory;
+      }
+
+      RenameStrategy? strategy;
+      if (enableRenamePreview) {
+        strategy = await showRenamePreviewDialog(
+          App.rootContext,
+          cache,
+          initialStrategy: defaultRenameStrategy,
+          comicName: archiveFile.name,
+        );
+        if (strategy == null) {
+          await cache.deleteIgnoreError(recursive: true);
+          controller.close();
+          return false;
+        }
+      } else {
+        strategy = defaultRenameStrategy;
+      }
+      if (strategy != null && !strategy.isNoOp) {
+        await _renameInDirectory(cache, strategy);
+      }
+
+      var comic = await CBZ.importFromDir(cache, archiveFile);
       imported[selectedFolder] = [comic];
     } catch (e, s) {
       Log.error("Import Comic", e.toString(), s);
@@ -45,12 +93,64 @@ class ImportComic {
       var files = (await dir.list().toList()).whereType<File>().toList();
       const supportedExtensions = ['cbz', 'zip', '7z', 'cb7'];
       files.removeWhere((e) => !supportedExtensions.contains(e.extension));
+      if (files.isEmpty) {
+        App.rootContext.showMessage(message: "No valid comics found".tl);
+        return false;
+      }
       Map<String?, List<LocalComic>> imported = {};
       var controller = showLoadingDialog(App.rootContext, allowCancel: false);
+
+      // Extract first archive for preview
+      var firstFile = files.first;
+      var cache = Directory(FilePath.join(App.cachePath, 'cbz_import'));
+
+      RenameStrategy? strategy;
+      try {
+        if (cache.existsSync()) cache.deleteSync(recursive: true);
+        cache.createSync();
+        await CBZ.extractArchive(firstFile, cache);
+        var entries = cache.listSync();
+        if (entries.length == 1 && entries.first is Directory) {
+          cache = entries.first as Directory;
+        }
+
+        if (enableRenamePreview) {
+          strategy = await showRenamePreviewDialog(
+            App.rootContext,
+            cache,
+            initialStrategy: defaultRenameStrategy,
+            comicName: '${firstFile.name}  —  '
+                '${'Previewing 1 of @n'.tlParams({'n': files.length.toString()})}',
+          );
+          if (strategy == null) {
+            await cache.deleteIgnoreError(recursive: true);
+            controller.close();
+            return false;
+          }
+        } else {
+          strategy = defaultRenameStrategy;
+        }
+      } catch (e, s) {
+        Log.error("Import Comic", e.toString(), s);
+      }
+
       var comics = <LocalComic>[];
-      for (var file in files) {
+      for (var i = 0; i < files.length; i++) {
         try {
-          var comic = await CBZ.import(file);
+          // Re-extract for each file (overwrites temp dir)
+          if (cache.existsSync()) cache.deleteSync(recursive: true);
+          cache.createSync();
+          await CBZ.extractArchive(files[i], cache);
+          var entries = cache.listSync();
+          if (entries.length == 1 && entries.first is Directory) {
+            cache = entries.first as Directory;
+          }
+
+          if (strategy != null && !strategy.isNoOp) {
+            await _renameInDirectory(cache, strategy);
+          }
+
+          var comic = await CBZ.importFromDir(cache, files[i]);
           comics.add(comic);
         } catch (e, s) {
           Log.error("Import Comic", e.toString(), s);
@@ -174,6 +274,21 @@ class ImportComic {
     Map<String?, List<LocalComic>> imported = {selectedFolder: []};
     try {
       if (single) {
+        RenameStrategy? strategy;
+        if (enableRenamePreview) {
+          strategy = await showRenamePreviewDialog(
+            App.rootContext,
+            path,
+            initialStrategy: defaultRenameStrategy,
+            comicName: path.name,
+          );
+          if (strategy == null) return false;
+        } else {
+          strategy = defaultRenameStrategy;
+        }
+        if (strategy != null && !strategy.isNoOp) {
+          await _renameInDirectory(path, strategy);
+        }
         var result = await _checkSingleComic(path);
         if (result != null) {
           imported[selectedFolder]!.add(result);
@@ -182,12 +297,38 @@ class ImportComic {
           return false;
         }
       } else {
+        var subDirs = <Directory>[];
         await for (var entry in path.list()) {
           if (entry is Directory) {
-            var result = await _checkSingleComic(entry);
-            if (result != null) {
-              imported[selectedFolder]!.add(result);
-            }
+            subDirs.add(entry);
+          }
+        }
+        if (subDirs.isEmpty) {
+          App.rootContext.showMessage(message: "No valid comics found".tl);
+          return false;
+        }
+
+        RenameStrategy? strategy;
+        if (enableRenamePreview) {
+          strategy = await showRenamePreviewDialog(
+            App.rootContext,
+            subDirs.first,
+            initialStrategy: defaultRenameStrategy,
+            comicName:
+                '${subDirs.first.name}  —  ${'Previewing 1 of @n'.tlParams({'n': subDirs.length.toString()})}',
+          );
+          if (strategy == null) return false;
+        } else {
+          strategy = defaultRenameStrategy;
+        }
+
+        for (var dir in subDirs) {
+          if (strategy != null && !strategy.isNoOp) {
+            await _renameInDirectory(dir, strategy);
+          }
+          var result = await _checkSingleComic(dir);
+          if (result != null) {
+            imported[selectedFolder]!.add(result);
           }
         }
       }
@@ -237,6 +378,34 @@ class ImportComic {
     controller.close();
     if (cancelled) return false;
     return registerComics(imported, false);
+  }
+
+  /// Rename image files in [dir] and its chapter subdirectories using [strategy].
+  ///
+  /// Checks for naming conflicts before renaming and logs results.
+  Future<void> _renameInDirectory(Directory dir, RenameStrategy strategy) async {
+    final scanResult = await FileRenamer.scanDirectory(dir);
+    for (var entry in scanResult.entries) {
+      if (entry.value.isEmpty) continue;
+      var targetDir =
+          entry.key.isEmpty ? dir : Directory('${dir.path}/${entry.key}');
+      if (!await targetDir.exists()) continue;
+      var previews = FileRenamer.preview(entry.value, strategy);
+      var willRename = previews.where((p) => p.willRename).length;
+      if (willRename == 0) continue;
+
+      var conflicts = FileRenamer.findConflicts(previews);
+      if (conflicts.isNotEmpty) {
+        Log.info("Import Comic",
+            "Skipping rename in '${entry.key.isNotEmpty ? entry.key : dir.name}': "
+            "${conflicts.length} naming conflict(s) detected.");
+        continue;
+      }
+
+      var renamed = await FileRenamer.execute(targetDir, previews);
+      Log.info("Import Comic",
+          "Renamed $renamed/$willRename files in '${entry.key.isNotEmpty ? entry.key : dir.name}'");
+    }
   }
 
   //Automatically search for cover image and chapters

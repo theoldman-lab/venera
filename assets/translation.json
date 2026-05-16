@@ -439,7 +439,12 @@
     "Clear specific reader settings for this device": "清除该设备的特殊阅读设置",
     "Enable device specific settings": "启用此设备特定设置",
     "Ignore Certificate Errors": "忽略证书错误",
-    "Mouse scroll speed": "鼠标滚动速度"
+    "Mouse scroll speed": "鼠标滚动速度",
+    "Import Preview": "导入预览",
+    "@total image files, @willRename will be renamed": "@total 个图片文件, @willRename 个将被重命名",
+    "Warning: @count naming conflicts detected": "警告: 检测到 @count 个命名冲突",
+    "Strategy": "策略",
+    "Previewing 1 of @n": "预览第 1 个，共 @n 个"
   },
   "zh_TW": {
     "Home": "首頁",
@@ -881,6 +886,11 @@
     "Clear specific reader settings for this device": "清除該裝置的特殊閱讀設定",
     "Enable device specific settings": "啟用此裝置特定設定",
     "Ignore Certificate Errors": "忽略證書錯誤",
-    "Mouse scroll speed": "滑鼠滾動速度"
+    "Mouse scroll speed": "滑鼠滾動速度",
+    "Import Preview": "匯入預覽",
+    "@total image files, @willRename will be renamed": "@total 個圖片檔案, @willRename 個將被重新命名",
+    "Warning: @count naming conflicts detected": "警告: 檢測到 @count 個命名衝突",
+    "Strategy": "策略",
+    "Previewing 1 of @n": "預覽第 1 個，共 @n 個"
   }
 }

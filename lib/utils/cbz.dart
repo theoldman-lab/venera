@@ -90,6 +90,19 @@ abstract class CBZ {
     if (f.length == 1 && f.first is Directory) {
       cache = f.first as Directory;
     }
+    return _processExtractedDir(cache, file);
+  }
+
+  /// Import from an already-extracted directory (e.g. after optional renaming).
+  ///
+  /// [dir] must contain image files. [originalFile] is the source archive (used
+  /// for fallback title). The temp directory will be cleaned up after processing.
+  static Future<LocalComic> importFromDir(Directory dir, File originalFile) {
+    return _processExtractedDir(dir, originalFile);
+  }
+
+  static Future<LocalComic> _processExtractedDir(
+      Directory cache, File file) async {
     var metaDataFile = File(FilePath.join(cache.path, 'metadata.json'));
     ComicMetaData? metaData;
     if (metaDataFile.existsSync()) {

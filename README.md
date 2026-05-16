@@ -105,6 +105,21 @@ flutter build apk --split-per-abi --release
 
 ## 更新日志
 
+### 2026-05-16
+
+#### 新增：导入漫画时重命名页面文件，解决页序乱序问题
+- **背景：** 导入本地漫画时，图片文件名中的数字常因位数不一致（如 `1.jpg`、`10.jpg`、`2.jpg`）导致字符串排序后页序错乱。
+- **功能：** 导入漫画（目录或压缩包）时先弹出预览对话框，显示当前文件顺序及重命名后的效果，用户可选择重命名策略后确认导入。
+- **内置三种重命名策略：**
+  - "提取数字" — 提取文件名首个连续数字并补零到 4 位（如 `abc123.jpg` → `0123.jpg`）
+  - "顺序编号" — 按排序后顺序重命名为 `0001.ext`、`0002.ext`…
+  - "保持原名" — 不重命名
+- **可扩展：** 实现 `RenameStrategy` 抽象接口并通过 `RenameStrategyRegistry.register()` 注册即可添加自定义策略。
+- **覆盖范围：** 单部漫画、多部漫画（目录）、单个压缩包（cbz/zip/7z）、多个压缩包。
+- **文件：** `lib/utils/rename.dart`（新增）、`lib/utils/import_comic.dart`（修改）、`lib/utils/cbz.dart`（重构 `import` → `extractArchive` + `importFromDir`）
+
+---
+
 ### 2026-05-06
 
 #### 修复 WebDAV 同步上传失败（`flutter_rust_bridge` 未初始化）
