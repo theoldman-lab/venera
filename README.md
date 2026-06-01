@@ -3,6 +3,18 @@
 一个 Android 漫画阅读应用。
 > 由于本人精力有限，该fork专注于安卓端（包括Eink设备）的优化与维护，如有其他平台需求，请另寻高见
 
+## 关联项目——pixiv源
+
+https://github.com/theoldman-lab/venera-configs-pixiv.git
+在 Venera App 中：**漫画源界面** → 输入 Pixiv 源 URL 并添加：
+
+```
+https://cdn.jsdelivr.net/gh/theoldman-lab/venera-configs@main/pixiv.js
+```
+
+添加后下拉刷新即可加载。如遇更新延迟，可手动刷新 jsDelivr 缓存（见 `.github/workflows/purge_cdn.yml`）。
+
+
 ## 功能
 - 阅读本地漫画
 - 使用 JavaScript 创建漫画源
