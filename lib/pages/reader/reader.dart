@@ -132,11 +132,6 @@ class _ReaderState extends State<Reader>
       return;
     }
 
-    // 如果正在显示，先隐藏再触发
-    if (_einkIsShowing) {
-      _einkIsShowing = false;
-    }
-
     String? eInkColorStr = appdata.settings.getReaderSetting(
       cid,
       type.sourceKey,
@@ -170,6 +165,9 @@ class _ReaderState extends State<Reader>
     setState(() {
       _einkIsShowing = false;
     });
+    final cb = _einkOnComplete;
+    _einkOnComplete = null;
+    cb?.call();
   }
 
   /// The maximum page number for images only (excluding chapter comments page).
@@ -666,6 +664,8 @@ abstract mixin class _ReaderLocation {
   /// Flag to indicate that the page should jump to the last page after images are loaded.
   bool _jumpToLastPageOnLoad = false;
 
+  VoidCallback? _einkOnComplete;
+
   int get page => _page;
 
   set page(int value) {
@@ -690,7 +690,7 @@ abstract mixin class _ReaderLocation {
 
   void update();
 
-  /// Trigger E-Ink refresh overlay
+  /// Trigger E-Ink refresh overlay. Use [_einkOnComplete] for post-flash callback.
   void triggerEInkRefresh();
 
   bool enablePageAnimation(String cid, ComicType type) => appdata.settings
@@ -729,24 +729,26 @@ abstract mixin class _ReaderLocation {
       if (page == this.page && page != 1 && page != totalPages) {
         return false;
       }
-      final hasAnimation = enablePageAnimation(cid, type);
-      if (hasAnimation) {
-        _pendingPage = page;
-        _animationCount++;
-        update();
-        _imageViewController!.animateToPage(page).then((_) {
-          _animationCount--;
-          if (_pendingPage == page) {
-            _pendingPage = null;
-          }
+      final targetPage = page;
+      _einkOnComplete = () {
+        final hasAnimation = enablePageAnimation(cid, type);
+        if (hasAnimation) {
+          _pendingPage = targetPage;
+          _animationCount++;
           update();
-        });
-      } else {
-        this.page = page;
-        update();
-        _imageViewController!.toPage(page);
-      }
-      // Trigger E-Ink refresh overlay on every page turn (independent of page animation)
+          _imageViewController!.animateToPage(targetPage).then((_) {
+            _animationCount--;
+            if (_pendingPage == targetPage) {
+              _pendingPage = null;
+            }
+            update();
+          });
+        } else {
+          this.page = targetPage;
+          update();
+          _imageViewController!.toPage(targetPage);
+        }
+      };
       triggerEInkRefresh();
       return true;
     }
@@ -772,11 +774,12 @@ abstract mixin class _ReaderLocation {
 
   bool toChapter(int c, {bool toLastPage = false}) {
     if (_validateChapter(c) && !isLoading) {
-      chapter = c;
-      page = 1;
-      _jumpToLastPageOnLoad = toLastPage;
-      update();
-      // 切换章节时也触发 E-Ink 刷新
+      _einkOnComplete = () {
+        chapter = c;
+        page = 1;
+        _jumpToLastPageOnLoad = toLastPage;
+        update();
+      };
       triggerEInkRefresh();
       return true;
     }
