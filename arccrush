@@ -1,0 +1,305 @@
+#!/bin/bash
+# arccrush v2 — 批量压缩包内图片
+# 解压→压缩图片（Pillow）→原样封回
+#
+# 用法:
+#   ./arccrush <目录>                # 处理目录下所有 .zip/.cbz/.rar/.cbr
+#   ./arccrush <目录> -f webp        # 转 WebP (保留透明, 更高压缩)
+#   ./arccrush <目录> -q 60          # JPEG 质量 60 (0-100, 默认 75)
+#   ./arccrush <目录> --progressive  # 渐进式 JPEG (网页加载更快)
+#   ./arccrush <目录> --alpha-skip   # 跳过带透明通道的图片 (不转 JPEG)
+#   ./arccrush <目录> --dry-run      # 预览
+
+set -euo pipefail
+
+SRC_DIR="${1:-.}"
+FMT="jpeg"
+QUALITY=""
+DRY_RUN=false
+KEEP_TEMP=false
+PROGRESSIVE=false
+ALPHA_SKIP=false
+JOBS=$(nproc 2>/dev/null || echo 4)
+
+shift 2>/dev/null || true
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f|--format)     FMT="$2"; shift 2 ;;
+        -q|--quality)    QUALITY="$2"; shift 2 ;;
+        -j|--jobs)       JOBS="$2"; shift 2 ;;
+        --progressive)   PROGRESSIVE=true; shift ;;
+        --alpha-skip)    ALPHA_SKIP=true; shift ;;
+        --dry-run)       DRY_RUN=true; shift ;;
+        --keep-temp)     KEEP_TEMP=true; shift ;;
+        *) echo "未知参数: $1"; exit 1 ;;
+    esac
+done
+
+# 默认质量 (Pillow scale: 0-100)
+if [[ -z "$QUALITY" ]]; then
+    [[ "$FMT" == "webp" ]] && QUALITY=80 || QUALITY=75
+fi
+
+TMP_ROOT="/tmp/arccrush_$$"
+OUTDIR="$(realpath "$SRC_DIR")/crushed"
+mkdir -p "$TMP_ROOT"
+$DRY_RUN || mkdir -p "$OUTDIR"
+
+C_RESET='\033[0m'
+C_BOLD='\033[1m'
+C_DIM='\033[2m'
+C_GREEN='\033[32m'
+C_YELLOW='\033[33m'
+C_CYAN='\033[36m'
+
+format_size() {
+    numfmt --to=iec-i --suffix=B "$1" 2>/dev/null || echo "${1} bytes"
+}
+
+pct() {
+    local a=$1 b=$2
+    if [[ $a -gt 0 ]]; then echo "$(( 100 - b * 100 / a ))"; else echo 0; fi
+}
+
+cleanup() {
+    if ! $KEEP_TEMP; then
+        rm -rf "$TMP_ROOT"
+    fi
+}
+trap cleanup EXIT
+
+# ── 内嵌 Python 压缩器 ────────────────────────────────────────────
+compress_py="$TMP_ROOT/_compress.py"
+cat > "$compress_py" << 'PYEOF'
+import sys, os, json
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from PIL import Image
+
+Image.MAX_IMAGE_PIXELS = None  # 不限制图片尺寸
+
+def compress_one(path, fmt, quality, progressive, alpha_skip):
+    old_size = os.path.getsize(path)
+    try:
+        img = Image.open(path)
+        base = os.path.splitext(path)[0]
+
+        if fmt == "webp":
+            new_path = base + ".webp"
+            # WebP 支持 RGBA, 直接保留透明度
+            if img.mode == "P":
+                img = img.convert("RGBA")
+            elif img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA")
+            img.save(new_path, "WEBP", quality=quality, method=6)
+            os.remove(path)
+            return {"ok": True, "old": old_size, "new": os.path.getsize(new_path),
+                    "old_name": os.path.basename(path), "new_name": os.path.basename(new_path)}
+
+        elif fmt == "jpeg":
+            new_path = base + ".jpg"
+            has_alpha = img.mode in ("RGBA", "LA") or \
+                        (img.mode == "P" and img.info.get("transparency") is not None)
+
+            if has_alpha:
+                if alpha_skip:
+                    return {"ok": False, "skip": True,
+                            "old": old_size, "new": old_size,
+                            "old_name": os.path.basename(path), "reason": "alpha"}
+                # 合成为白底
+                if img.mode != "RGBA":
+                    img = img.convert("RGBA")
+                bg = Image.new("RGB", img.size, (255, 255, 255))
+                bg.paste(img, mask=img.split()[3])
+                img = bg
+            else:
+                img = img.convert("RGB")
+
+            save_kw = {"quality": quality, "optimize": True}
+            if progressive:
+                save_kw["progressive"] = True
+            img.save(new_path, "JPEG", **save_kw)
+            os.remove(path)
+            return {"ok": True, "old": old_size, "new": os.path.getsize(new_path),
+                    "old_name": os.path.basename(path), "new_name": os.path.basename(new_path)}
+
+        else:
+            return {"ok": False, "skip": True,
+                    "old": old_size, "new": old_size,
+                    "old_name": os.path.basename(path), "reason": f"unknown fmt {fmt}"}
+
+    except Exception as e:
+        return {"ok": False, "skip": False,
+                "old": old_size, "new": old_size,
+                "old_name": os.path.basename(path), "error": str(e)}
+
+def main():
+    workdir   = sys.argv[1]
+    fmt       = sys.argv[2]
+    quality   = int(sys.argv[3])
+    jobs      = int(sys.argv[4])
+    progressive = sys.argv[5] == "true"
+    alpha_skip  = sys.argv[6] == "true"
+
+    exts = {".png", ".jpg", ".jpeg", ".webp"}
+    images = []
+    for root, dirs, files in os.walk(workdir):
+        for f in files:
+            if os.path.splitext(f)[1].lower() in exts:
+                images.append(os.path.join(root, f))
+
+    total_old = 0
+    total_new = 0
+    skipped   = 0
+    errors    = 0
+
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        futures = {pool.submit(compress_one, p, fmt, quality, progressive, alpha_skip): p
+                   for p in images}
+        for fut in as_completed(futures):
+            r = fut.result()
+            total_old += r["old"]
+            total_new += r["new"]
+            if not r["ok"]:
+                if r.get("skip"):
+                    skipped += 1
+                else:
+                    errors += 1
+                    print(f"  ! {r['old_name']}: {r.get('error', 'unknown')}", file=sys.stderr)
+
+    print(f"IMAGES {len(images)}")
+    print(f"ERRORS {errors}")
+    print(f"SKIPPED {skipped}")
+    print(f"OLD_SIZE {total_old}")
+    print(f"NEW_SIZE {total_new}")
+
+if __name__ == "__main__":
+    main()
+PYEOF
+# ── 内嵌 Python 结束 ──────────────────────────────────────────────
+
+process_archive() {
+    local arc="$1"
+    local basename name ext workdir
+    basename=$(basename "$arc")
+    name="${basename%.*}"
+    ext="$(echo "${basename##*.}" | tr '[:upper:]' '[:lower:]')"
+    workdir="$TMP_ROOT/$name"
+
+    local size_before
+    size_before=$(stat -c%s "$arc")
+
+    echo -e "${C_BOLD}── ${name}.${ext}${C_RESET}  ${C_DIM}($(format_size $size_before))${C_RESET}"
+
+    if $DRY_RUN; then
+        local count
+        count=$(unzip -l "$arc" 2>/dev/null | grep -ciE '\.(png|jpg|jpeg|webp)' || echo 0)
+        echo -e "  ${C_DIM}内含 ~${count} 张图片${C_RESET}"
+        return
+    fi
+
+    mkdir -p "$workdir"
+
+    # 解压
+    local unpack_ok=true
+    case "$ext" in
+        rar|cbr)
+            if ! unrar x -o+ "$arc" "$workdir/" 2>/dev/null; then
+                echo -e "  ${C_YELLOW}解压失败 (rar)，跳过${C_RESET}"
+                unpack_ok=false
+            fi
+            ;;
+        *)
+            if ! unzip -qo "$arc" -d "$workdir" 2>/dev/null; then
+                echo -e "  ${C_YELLOW}解压失败 (zip)，跳过${C_RESET}"
+                unpack_ok=false
+            fi
+            ;;
+    esac
+
+    if ! $unpack_ok; then
+        rm -rf "$workdir"
+        return
+    fi
+
+    # 调用 Python 压缩所有图片
+    local py_out
+    py_out=$(python3 "$compress_py" "$workdir" "$FMT" "$QUALITY" "$JOBS" "$PROGRESSIVE" "$ALPHA_SKIP")
+
+    local img_count errors skipped before_total after_total
+    img_count=$(echo "$py_out"   | awk '/^IMAGES /  {print $2}')
+    errors=$(echo "$py_out"      | awk '/^ERRORS /  {print $2}')
+    skipped=$(echo "$py_out"     | awk '/^SKIPPED / {print $2}')
+    before_total=$(echo "$py_out"| awk '/^OLD_SIZE /{print $2}')
+    after_total=$(echo "$py_out" | awk '/^NEW_SIZE /{print $2}')
+
+    : "${img_count:=0}" "${errors:=0}" "${skipped:=0}" "${before_total:=0}" "${after_total:=0}"
+
+    # 重新打包
+    # RAR/CBR → 输出为 zip/cbz（因为用 zip 重新打包）
+    local out_ext="$ext"
+    case "$ext" in rar) out_ext=zip ;; cbr) out_ext=cbz ;; esac
+    local out_arc="$OUTDIR/${name}.${out_ext}"
+    (
+        cd "$workdir" || exit 1
+        zip -r9 "$out_arc" . 2>/dev/null
+    )
+
+    local size_after arc_pct file_pct
+    size_after=$(stat -c%s "$out_arc" 2>/dev/null || echo 0)
+    arc_pct=$(pct $before_total $after_total)
+    file_pct=$(pct $size_before $size_after)
+
+    local extra=""
+    [[ $skipped -gt 0 ]] && extra=" ${C_DIM}(跳过${skipped})${C_RESET}"
+    [[ $errors -gt 0 ]] && extra+=" ${C_YELLOW}(失败${errors})${C_RESET}"
+
+    echo -e "  ${C_GREEN}${img_count}图${C_RESET}${extra} | $(format_size $before_total)→$(format_size $after_total) (-${arc_pct}%) | 包: $(format_size $size_before)→$(format_size $size_after) (-${file_pct}%)"
+
+    rm -rf "$workdir"
+}
+
+# ── 主流程 ──
+total_archives=0
+total_before=0
+total_after=0
+
+if $DRY_RUN; then
+    echo -e "${C_BOLD}=== DRY RUN | 格式=$FMT 质量=$QUALITY 并行=$JOBS → $OUTDIR/ ===${C_RESET}"
+else
+    echo -e "${C_BOLD}=== arccrush | 格式=$FMT 质量=$QUALITY 并行=$JOBS | $SRC_DIR → $OUTDIR/ ===${C_RESET}"
+fi
+
+shopt -s nullglob
+for arc in "$SRC_DIR"/*.zip "$SRC_DIR"/*.cbz \
+           "$SRC_DIR"/*.ZIP "$SRC_DIR"/*.CBZ \
+           "$SRC_DIR"/*.rar "$SRC_DIR"/*.cbr \
+           "$SRC_DIR"/*.RAR "$SRC_DIR"/*.CBR; do
+    [[ -f "$arc" ]] || continue
+    ((total_archives++)) || true
+
+    sz=$(stat -c%s "$arc")
+    total_before=$((total_before + sz))
+    process_archive "$arc"
+
+    if ! $DRY_RUN; then
+        out_arc="$OUTDIR/$(basename "$arc")"
+        sz2=$(stat -c%s "$out_arc" 2>/dev/null || echo 0)
+        total_after=$((total_after + sz2))
+    fi
+done
+
+# ── 汇总 ──
+echo ""
+echo -e "${C_BOLD}═══════════════════════════════════════${C_RESET}"
+echo -e "处理: ${C_BOLD}${total_archives}${C_RESET} 个压缩包"
+echo -e "格式: ${C_BOLD}$FMT${C_RESET}  质量: ${C_BOLD}$QUALITY${C_RESET}  并行: ${C_BOLD}$JOBS${C_RESET}"
+
+if ! $DRY_RUN && [[ $total_before -gt 0 ]]; then
+    echo -e "压缩前: ${C_BOLD}$(format_size $total_before)${C_RESET}"
+    echo -e "压缩后: ${C_BOLD}$(format_size $total_after)${C_RESET}"
+    echo -e "节省:   ${C_GREEN}$(format_size $((total_before - total_after)))${C_RESET}  (${C_GREEN}$(pct $total_before $total_after)%${C_RESET})"
+fi
+
+echo -e "输出:   ${C_CYAN}$OUTDIR/${C_RESET}"
+echo ""
+echo -e "${C_DIM}提示: $0 <目录> [-f webp|jpeg] [-q 质量] [-j 并行数] [--progressive] [--alpha-skip] [--dry-run]${C_RESET}"
