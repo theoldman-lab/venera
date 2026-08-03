@@ -129,6 +129,9 @@ class _ReaderState extends State<Reader>
     // 如果设置为 null，使用全局设置
     enable ??= appdata.settings['enableEInkRefresh'] == true;
     if (!enable) {
+      final cb = _einkOnComplete;
+      _einkOnComplete = null;
+      cb?.call();
       return;
     }
 

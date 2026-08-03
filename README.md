@@ -117,6 +117,14 @@ flutter build apk --split-per-abi --release
 
 ## 更新日志
 
+### 2026-08-03
+
+#### 修复：关闭 E-Ink 刷新后点击翻页失效
+- **问题：** 翻页逻辑被设计为"等 E-Ink 闪屏结束后才执行"。当关闭 E-Ink 刷新时，`triggerEInkRefresh()` 提前 `return`，导致 `_einkOnComplete` 中真正执行翻页的闭包永远不会被调用，点击/键盘方向键/底部滑条/音量键/自动翻页等入口全部失效（滑动翻页正常）。
+- **修复：** `lib/pages/reader/reader.dart` — `triggerEInkRefresh()` 的 E-Ink 关闭分支补上对 `_einkOnComplete` 的立即执行，与 `_hideEInkRefresh()` 的消费逻辑保持一致。
+
+---
+
 ### 2026-05-16
 
 #### 新增：导入漫画时重命名页面文件，解决页序乱序问题
